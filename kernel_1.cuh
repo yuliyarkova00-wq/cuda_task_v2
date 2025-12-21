@@ -1,0 +1,82 @@
+#pragma once
+#include <cuda_runtime.h>
+#include <cmath>
+
+__device__ double d_an_sol(double x, double y, double z, double t);
+__device__ double d_compute_p(double x, double y, double z);
+
+__global__ void it0_kernel(
+    double* u0,
+    int nx, int ny, int nz,
+    int sx, int sy, int sz,
+    double dx, double dy, double dz,
+    double* err
+);
+
+__global__ void it1_kernel(
+    double* u0,
+    double* u1,
+    double* d_bx0, double* d_bx1,
+    double* d_by0, double* d_by1,
+    double* d_bz0, double* d_bz1,
+    int nx, int ny, int nz,
+    int sx, int sy, int sz,
+    double dx, double dy, double dz,
+    double a, double tau,
+    double* err,
+    bool write_bounds
+);
+
+__global__ void main_kernel(
+    double* u0,
+    double* u1,
+    double* u2,
+    double* d_bx0,
+    double* d_bx1,
+    double* d_by0,
+    double* d_by1,
+    double* d_bz0,
+    double* d_bz1,
+    int nx, int ny, int nz,
+    int gx, int gy, int gz,
+    int sx, int sy, int sz,
+    double dx, double dy, double dz,
+    double a, double tau, double t,
+    double* err,
+    bool write_bounds
+);
+
+void it0_kernel_launcher(
+    double* u0, double *d_err, int nx, int ny, int nz,
+    int sx, int sy, int sz,
+    double dx, double dy, double dz,
+    double &err
+);
+
+void it1_kernel_launcher(
+    double* u0, double* u1,
+    double* d_bx0, double* d_bx1,
+    double* d_by0, double* d_by1,
+    double* d_bz0, double* d_bz1, double *d_err,
+    int nx, int ny, int nz,
+    int sx, int sy, int sz,
+    double dx, double dy, double dz,
+    double a, double tau,
+    double &err,
+    bool write_bounds
+);
+
+void main_kernel_launcher(
+    double* u0, double* u1, double* u2,
+    double* d_bx0, double* d_bx1,
+    double* d_by0, double* d_by1,
+    double* d_bz0, double* d_bz1, double *d_err,
+    int nx, int ny, int nz,
+    int gx, int gy, int gz,
+    int sx, int sy, int sz,
+    double dx, double dy, double dz,
+    double a, double tau, double t,
+    double &err,
+    bool write_bounds
+);
+

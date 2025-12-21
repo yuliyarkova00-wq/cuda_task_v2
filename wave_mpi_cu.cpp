@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cassert>
-#include "kernel.cuh"
+#include "kernel_1.cuh"
 #include <cuda_runtime.h>
 
 const double Lx = 1.0;
@@ -51,10 +51,10 @@ int main(int argc, char** argv) {
     cudaGetDeviceCount(&n_devices_available);
     int num_d = world_rank % n_devices_available;
     cudaSetDevice(num_d);
-    int Nx = 256;
-    int Ny = 256;
-    int Nz = 256;
-    double tau = 0.002;
+    int Nx = 512;
+    int Ny = 512;
+    int Nz = 512;
+    double tau = 0.001;
     int Nt = 50;
     double a = 1 / (4 * M_PI * M_PI);
     // double a = (Lx*Lx*Ly*Ly*Lz*Lz)/(Lx*Lx*Lz*Lz + Ly*Ly*Lz*Lz + Lx*Lx*Ly*Ly);
@@ -117,6 +117,8 @@ int main(int argc, char** argv) {
         cudaMalloc(&d_bz0, size_z * sizeof(double));
         cudaMalloc(&d_bz1, size_z * sizeof(double));
     }
+    double* d_err;
+    cudaMalloc(&d_err, local_ny * local_nz * local_nx * sizeof(double));
     double dx = Lx / (Nx - 1);
     double dy = Ly / (Ny - 1);
     double dz = Lz / (Nz - 1);
@@ -125,7 +127,7 @@ int main(int argc, char** argv) {
 
     double local_max_err0 = 0.0;
     it0_kernel_launcher(
-        dev_u0,
+        dev_u0, d_err,
         local_nx, local_ny, local_nz,
         start_x, start_y, start_z,
         dx, dy, dz,
@@ -141,7 +143,7 @@ int main(int argc, char** argv) {
 
     it1_kernel_launcher(
         dev_u0, dev_u1,
-        d_bx0, d_bx1, d_by0, d_by1, d_bz0, d_bz1,
+        d_bx0, d_bx1, d_by0, d_by1, d_bz0, d_bz1, d_err,
         local_nx, local_ny, local_nz,
         start_x, start_y, start_z,
         dx, dy, dz, a, tau,
@@ -221,7 +223,7 @@ int main(int argc, char** argv) {
         
         main_kernel_launcher(
             dev_u0, dev_u1, dev_u,
-            d_bx0, d_bx1, d_by0, d_by1, d_bz0, d_bz1,
+            d_bx0, d_bx1, d_by0, d_by1, d_bz0, d_bz1, d_err,
             local_nx, local_ny, local_nz,
             Nx, Ny, Nz,
             start_x, start_y, start_z,
