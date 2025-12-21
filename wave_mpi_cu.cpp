@@ -94,38 +94,36 @@ int main(int argc, char** argv) {
     int gx = local_nx + 2;
     int gy = local_ny + 2;
     int gz = local_nz + 2;
-    size_t total = (size_t)gx * gy * gz;
-
-    std::vector<double> u0(total, 0.0), u1(total, 0.0), u2(total, 0.0);
+    size_t total = (size_t)gx * gy * gz;    
     double *dev_u0 = nullptr;
     double *dev_u1 = nullptr;
     double *dev_u = nullptr;
     cudaMalloc(&dev_u0, total*sizeof(double));
-    double* d_bx0;
-   double* d_bx1;
-   double* d_by0;
-   double* d_by1;
-   double* d_bz0;
-   double* d_bz1;
+    double* d_bx0 = nullptr;
+   double* d_bx1 = nullptr;
+   double* d_by0 = nullptr;
+   double* d_by1 = nullptr;
+   double* d_bz0 = nullptr;
+   double* d_bz1 = nullptr;
    int size_x = local_ny * local_nz;
-int size_y = local_nx * local_nz;
-int size_z = local_nx * local_ny;
-
-cudaMalloc(&d_bx0, size_x * sizeof(double));
-cudaMalloc(&d_bx1, size_x * sizeof(double));
-cudaMalloc(&d_by0, size_y * sizeof(double));
-cudaMalloc(&d_by1, size_y * sizeof(double));
-cudaMalloc(&d_bz0, size_z * sizeof(double));
-cudaMalloc(&d_bz1, size_z * sizeof(double));
+   int size_y = local_nx * local_nz;
+   int size_z = local_nx * local_ny;
+   bool write_bounds = (world_size > 1) ? true : false;
+   if (world_size > 1){
+        cudaMalloc(&d_bx0, size_x * sizeof(double));
+        cudaMalloc(&d_bx1, size_x * sizeof(double));
+        cudaMalloc(&d_by0, size_y * sizeof(double));
+        cudaMalloc(&d_by1, size_y * sizeof(double));
+        cudaMalloc(&d_bz0, size_z * sizeof(double));
+        cudaMalloc(&d_bz1, size_z * sizeof(double));
+    }
     double dx = Lx / (Nx - 1);
     double dy = Ly / (Ny - 1);
     double dz = Lz / (Nz - 1);
    
-    
     double t_beg = MPI_Wtime();
 
     double local_max_err0 = 0.0;
-    
     it0_kernel_launcher(
         dev_u0,
         local_nx, local_ny, local_nz,
@@ -133,77 +131,7 @@ cudaMalloc(&d_bz1, size_z * sizeof(double));
         dx, dy, dz,
         local_max_err0
     );
-    cudaMemcpy(u0.data(), dev_u0, total*sizeof(double), cudaMemcpyDeviceToHost);
-    if (nbr_left == MPI_PROC_NULL) {
-        int gi = 0;
-        for (int j = 1; j <= local_ny; ++j)
-            for (int k = 1; k <= local_nz; ++k) {
-                int glob_i = start_x - 1; 
-                int glob_i_use = std::max(0, start_x - 1);
-                double x = glob_i_use * dx;
-                double y = (start_y + (j-1)) * dy;
-                double z = (start_z + (k-1)) * dz;
-                u0[idx(gi,j,k,gx,gy,gz)] = an_sol(x,y,z,0.0);
-            }
-    }
-    if (nbr_right == MPI_PROC_NULL) {
-        int gi = gx-1;
-        for (int j = 1; j <= local_ny; ++j)
-            for (int k = 1; k <= local_nz; ++k) {
-                int glob_i_use = std::min(Nx-1, start_x + (local_nx));
-                double x = glob_i_use * dx;
-                double y = (start_y + (j-1)) * dy;
-                double z = (start_z + (k-1)) * dz;
-                u0[idx(gi,j,k,gx,gy,gz)] = an_sol(x,y,z,0.0);
-            }
-    }
-  
-    if (nbr_down == MPI_PROC_NULL) {
-        int gj = 0;
-        for (int i = 1; i <= local_nx; ++i)
-            for (int k = 1; k <= local_nz; ++k) {
-                int glob_j_use = std::max(0, start_y - 1);
-                double x = (start_x + (i-1)) * dx;
-                double y = glob_j_use * dy;
-                double z = (start_z + (k-1)) * dz;
-                u0[idx(i,gj,k,gx,gy,gz)] = an_sol(x,y,z,0.0);
-            }
-    }
-    if (nbr_up == MPI_PROC_NULL) {
-        int gj = gy-1;
-        for (int i = 1; i <= local_nx; ++i)
-            for (int k = 1; k <= local_nz; ++k) {
-                int glob_j_use = std::min(Ny-1, start_y + (local_ny));
-                double x = (start_x + (i-1)) * dx;
-                double y = glob_j_use * dy;
-                double z = (start_z + (k-1)) * dz;
-                u0[idx(i,gj,k,gx,gy,gz)] = an_sol(x,y,z,0.0);
-            }
-    }
-    
-    if (nbr_back == MPI_PROC_NULL) {
-        int gk = 0;
-        for (int i = 1; i <= local_nx; ++i)
-            for (int j = 1; j <= local_ny; ++j) {
-                int glob_k_use = std::max(0, start_z - 1);
-                double x = (start_x + (i-1)) * dx;
-                double y = (start_y + (j-1)) * dy;
-                double z = glob_k_use * dz;
-                u0[idx(i,j,gk,gx,gy,gz)] = an_sol(x,y,z,0.0);
-            }
-    }
-    if (nbr_front == MPI_PROC_NULL) {
-        int gk = gz-1;
-        for (int i = 1; i <= local_nx; ++i)
-            for (int j = 1; j <= local_ny; ++j) {
-                int glob_k_use = std::min(Nz-1, start_z + (local_nz));
-                double x = (start_x + (i-1)) * dx;
-                double y = (start_y + (j-1)) * dy;
-                double z = glob_k_use * dz;
-                u0[idx(i,j,gk,gx,gy,gz)] = an_sol(x,y,z,0.0);
-            }
-    }
-
+           
     double global_max_err0 = 0.0;
     MPI_Reduce(&local_max_err0, &global_max_err0, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (world_rank == 0) std::cout << "Max error at timestep 0 = " << global_max_err0 << std::endl;
@@ -217,12 +145,11 @@ cudaMalloc(&d_bz1, size_z * sizeof(double));
         local_nx, local_ny, local_nz,
         start_x, start_y, start_z,
         dx, dy, dz, a, tau,
-        local_max_err1
+        local_max_err1, write_bounds
     );
     
     MPI_Reduce(&local_max_err1, &global_max_err1, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (world_rank == 0) std::cout << "Max error at timestep 1 = " << global_max_err1 << std::endl;
-    cudaMemcpy(u1.data(), dev_u1, total*sizeof(double), cudaMemcpyDeviceToHost);
   
     int size_x_face = local_ny * local_nz;
     int size_y_face = local_nx * local_nz;
@@ -240,57 +167,56 @@ cudaMalloc(&d_bz1, size_z * sizeof(double));
     cudaMalloc(&dev_u, total*sizeof(double));    
     for (int n = 2; n < Nt; ++n) {
         double t = n * tau;
-        
-        cudaMemcpy(sbuf_x_left.data(), d_bx0, size_x_face*sizeof(double), cudaMemcpyDeviceToHost);
-        cudaMemcpy(sbuf_x_right.data(), d_bx1, size_x_face*sizeof(double), cudaMemcpyDeviceToHost);
-        cudaMemcpy(sbuf_y_down.data(), d_by1, size_y_face*sizeof(double), cudaMemcpyDeviceToHost);
-        cudaMemcpy(sbuf_y_up.data(), d_by0, size_y_face*sizeof(double), cudaMemcpyDeviceToHost);
-        cudaMemcpy(sbuf_z_back.data(), d_bz0, size_z_face*sizeof(double), cudaMemcpyDeviceToHost);
-        cudaMemcpy(sbuf_z_front.data(), d_bz1, size_z_face*sizeof(double), cudaMemcpyDeviceToHost);             
-        MPI_Request reqs[12];
-        int reqcnt = 0;
+        if (world_size > 1){
+            cudaMemcpy(sbuf_x_left.data(), d_bx0, size_x_face*sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(sbuf_x_right.data(), d_bx1, size_x_face*sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(sbuf_y_down.data(), d_by1, size_y_face*sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(sbuf_y_up.data(), d_by0, size_y_face*sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(sbuf_z_back.data(), d_bz0, size_z_face*sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(sbuf_z_front.data(), d_bz1, size_z_face*sizeof(double), cudaMemcpyDeviceToHost);             
+            MPI_Request reqs[12];
+            int reqcnt = 0;
 
        
-        if (nbr_left != MPI_PROC_NULL) {
-            MPI_Irecv(rbuf_x_left.data(), size_x_face, MPI_DOUBLE, nbr_left, 101, cart_comm, &reqs[reqcnt++]);
-            MPI_Isend(sbuf_x_left.data(), size_x_face, MPI_DOUBLE, nbr_left, 102, cart_comm, &reqs[reqcnt++]);
-        }
-        if (nbr_right != MPI_PROC_NULL) {
-            MPI_Irecv(rbuf_x_right.data(), size_x_face, MPI_DOUBLE, nbr_right, 102, cart_comm, &reqs[reqcnt++]);
-            MPI_Isend(sbuf_x_right.data(), size_x_face, MPI_DOUBLE, nbr_right, 101, cart_comm, &reqs[reqcnt++]);
-        }
+            if (nbr_left != MPI_PROC_NULL) {
+                MPI_Irecv(rbuf_x_left.data(), size_x_face, MPI_DOUBLE, nbr_left, 101, cart_comm, &reqs[reqcnt++]);
+                MPI_Isend(sbuf_x_left.data(), size_x_face, MPI_DOUBLE, nbr_left, 102, cart_comm, &reqs[reqcnt++]);
+            }
+            if (nbr_right != MPI_PROC_NULL) {
+                MPI_Irecv(rbuf_x_right.data(), size_x_face, MPI_DOUBLE, nbr_right, 102, cart_comm, &reqs[reqcnt++]);
+                MPI_Isend(sbuf_x_right.data(), size_x_face, MPI_DOUBLE, nbr_right, 101, cart_comm, &reqs[reqcnt++]);
+            }
 
        
-        if (nbr_down != MPI_PROC_NULL) {
-            MPI_Irecv(rbuf_y_down.data(), size_y_face, MPI_DOUBLE, nbr_down, 201, cart_comm, &reqs[reqcnt++]);
-            MPI_Isend(sbuf_y_down.data(), size_y_face, MPI_DOUBLE, nbr_down, 202, cart_comm, &reqs[reqcnt++]);
-        }
-        if (nbr_up != MPI_PROC_NULL) {
-            MPI_Irecv(rbuf_y_up.data(), size_y_face, MPI_DOUBLE, nbr_up, 202, cart_comm, &reqs[reqcnt++]);
-            MPI_Isend(sbuf_y_up.data(), size_y_face, MPI_DOUBLE, nbr_up, 201, cart_comm, &reqs[reqcnt++]);
-        }
+            if (nbr_down != MPI_PROC_NULL) {
+                MPI_Irecv(rbuf_y_down.data(), size_y_face, MPI_DOUBLE, nbr_down, 201, cart_comm, &reqs[reqcnt++]);
+                MPI_Isend(sbuf_y_down.data(), size_y_face, MPI_DOUBLE, nbr_down, 202, cart_comm, &reqs[reqcnt++]);
+            }
+            if (nbr_up != MPI_PROC_NULL) {
+                MPI_Irecv(rbuf_y_up.data(), size_y_face, MPI_DOUBLE, nbr_up, 202, cart_comm, &reqs[reqcnt++]);
+                MPI_Isend(sbuf_y_up.data(), size_y_face, MPI_DOUBLE, nbr_up, 201, cart_comm, &reqs[reqcnt++]);
+            }
 
         
-        if (nbr_back != MPI_PROC_NULL) {
-            MPI_Irecv(rbuf_z_back.data(), size_z_face, MPI_DOUBLE, nbr_back, 301, cart_comm, &reqs[reqcnt++]);
-            MPI_Isend(sbuf_z_back.data(), size_z_face, MPI_DOUBLE, nbr_back, 302, cart_comm, &reqs[reqcnt++]);
-        }
-        if (nbr_front != MPI_PROC_NULL) {
-            MPI_Irecv(rbuf_z_front.data(), size_z_face, MPI_DOUBLE, nbr_front, 302, cart_comm, &reqs[reqcnt++]);
-            MPI_Isend(sbuf_z_front.data(), size_z_face, MPI_DOUBLE, nbr_front, 301, cart_comm, &reqs[reqcnt++]);
-        }
+            if (nbr_back != MPI_PROC_NULL) {
+                MPI_Irecv(rbuf_z_back.data(), size_z_face, MPI_DOUBLE, nbr_back, 301, cart_comm, &reqs[reqcnt++]);
+                MPI_Isend(sbuf_z_back.data(), size_z_face, MPI_DOUBLE, nbr_back, 302, cart_comm, &reqs[reqcnt++]);
+            }
+            if (nbr_front != MPI_PROC_NULL) {
+                MPI_Irecv(rbuf_z_front.data(), size_z_face, MPI_DOUBLE, nbr_front, 302, cart_comm, &reqs[reqcnt++]);
+                MPI_Isend(sbuf_z_front.data(), size_z_face, MPI_DOUBLE, nbr_front, 301, cart_comm, &reqs[reqcnt++]);
+            }
 
         
-        if (reqcnt) MPI_Waitall(reqcnt, reqs, MPI_STATUSES_IGNORE);
+            if (reqcnt) MPI_Waitall(reqcnt, reqs, MPI_STATUSES_IGNORE);
 
         
-        cudaMemcpy(d_bx0,rbuf_x_left.data(), size_x_face*sizeof(double), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_bx1,rbuf_x_right.data(), size_x_face*sizeof(double), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_by1, rbuf_y_down.data(), size_y_face*sizeof(double), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_by0, rbuf_y_up.data(), size_y_face*sizeof(double), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_bz0, rbuf_z_back.data(), size_z_face*sizeof(double), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_bz1, rbuf_z_front.data(), size_z_face*sizeof(double), cudaMemcpyHostToDevice);
-        
+            cudaMemcpy(d_bx0,rbuf_x_left.data(), size_x_face*sizeof(double), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_bx1,rbuf_x_right.data(), size_x_face*sizeof(double), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_by0, rbuf_y_up.data(), size_y_face*sizeof(double), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_bz0, rbuf_z_back.data(), size_z_face*sizeof(double), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_bz1, rbuf_z_front.data(), size_z_face*sizeof(double), cudaMemcpyHostToDevice);
+        }
         double local_max_err = 0.0;
         
         main_kernel_launcher(
@@ -301,7 +227,7 @@ cudaMalloc(&d_bz1, size_z * sizeof(double));
             start_x, start_y, start_z,
             dx, dy, dz,
             a, tau, t,
-            local_max_err
+            local_max_err, write_bounds
         );
 
         
@@ -319,16 +245,17 @@ cudaMalloc(&d_bz1, size_z * sizeof(double));
     double max_elapsed;
     MPI_Reduce(&elapsed, &max_elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (world_rank == 0) std::cout << "Execution time (max over ranks): " << max_elapsed << " s" << std::endl;
-    
     cudaFree(dev_u0);
     cudaFree(dev_u1);
     cudaFree(dev_u);
-    cudaFree(d_bx0);
-cudaFree(d_bx1);
-cudaFree(d_by0);
-cudaFree(d_by1);
-cudaFree(d_bz0);
-cudaFree(d_bz1);
+    if (world_size > 1){
+        cudaFree(d_bx0);
+        cudaFree(d_bx1);
+        cudaFree(d_by0);
+        cudaFree(d_by1);
+        cudaFree(d_bz0);
+        cudaFree(d_bz1);
+    }
     MPI_Finalize();
     return 0;
 }

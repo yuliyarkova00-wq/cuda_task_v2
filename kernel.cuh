@@ -29,7 +29,7 @@ double* d_bz0, double* d_bz1,
     int sx, int sy, int sz,
     double dx, double dy, double dz,
     double a, double tau,
-    double *err
+    double *err, bool write_bounds
 );
 
 void it1_kernel_launcher(
@@ -42,7 +42,7 @@ double* d_bz0, double* d_bz1,
     int sx, int sy, int sz,
     double dx, double dy, double dz,
     double a, double tau,
-    double &err
+    double &err, bool write_bounds
 );
 
 __global__ void main_kernel(
@@ -57,7 +57,7 @@ double* d_bz0, double* d_bz1,
     int sx, int sy, int sz,
     double dx, double dy, double dz,
     double a, double tau, double t,
-    double *err
+    double *err, bool write_bounds
 );
 
 void main_kernel_launcher(
@@ -72,5 +72,5 @@ double* d_bz0, double* d_bz1,
     int sx, int sy, int sz,
     double dx, double dy, double dz,
     double a, double tau, double t,
-    double &err 
+    double &err, bool write_bounds
 );

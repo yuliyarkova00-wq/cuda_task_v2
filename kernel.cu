@@ -57,7 +57,7 @@ __global__ void it1_kernel(
     int sx, int sy, int sz,
     double dx, double dy, double dz,
     double a, double tau,
-    double* err
+    double* err, bool write_bounds
 ){
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
@@ -80,13 +80,14 @@ __global__ void it1_kernel(
     int id = IDX(i,j,k);
     double val = u0[id] + 0.5 * a * tau * tau * (d2x+d2y+d2z);
     u1[id] = val;
-    if (i == 1) d_bx0[(j-1)*nz + k -1] = val;
-if (i == nx) d_bx1[(j-1)*nz + k-1] = val;
-if (j == 1) d_by0[(i-1)*nz + k-1] = val;
-if (j == ny) d_by1[(i-1)*nz + k-1] = val;
-if (k == 1) d_bz0[(i-1)*ny+ j-1] = val;
-if (k == nz) d_bz1[(i-1)*ny + j-1] = val;
-   
+    if (write_bounds){
+        if (i == 1) d_bx0[(j-1)*nz + k -1] = val;
+        if (i == nx) d_bx1[(j-1)*nz + k-1] = val;
+        if (j == 1) d_by0[(i-1)*nz + k-1] = val;
+        if (j == ny) d_by1[(i-1)*nz + k-1] = val;
+        if (k == 1) d_bz0[(i-1)*ny+ j-1] = val;
+        if (k == nz) d_bz1[(i-1)*ny + j-1] = val;
+    }
     int tid = ((i-1)*ny + (j-1))*nz + (k-1);
     err[tid] = fabs(val - d_an_sol(x,y,z,tau));
 }
@@ -104,19 +105,21 @@ __global__ void main_kernel(
     double dx, double dy, double dz,
     double a, double tau,
     double t,
-    double* err
+    double* err, bool write_bounds
 ){
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
     int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
 
     if (i > nx || j > ny || k > nz) return;
-    if (i == 1) u1[(0 * (ny+2) + j)*(nz+2) + k] =  d_bx0[(j-1)*nz + k -1];
-    if (i == nx) u1[((nx+1) * (ny+2) + j)*(nz+2) + k] =  d_bx1[(j-1)*nz + k -1];
-if (j == 1) u1[(i * (ny+2) + 0)*(nz+2) + k] =  d_by0[(i-1)*nz + k -1];
-if (j == ny) u1[(i * (ny+2) + ny+1)*(nz+2) + k] =  d_by1[(i-1)*nz + k -1];
-if (k == 1) u1[(i * (ny+2) + j)*(nz+2) + 0] =  d_bz0[(i-1)*ny + j -1];
-if (k == nz) u1[(i * (ny+2) + 0)*(nz+2) + nz+1] =  d_bz1[(i-1)*ny + j -1];
+    if (write_bounds){
+        if (i == 1) u1[(0 * (ny+2) + j)*(nz+2) + k] =  d_bx0[(j-1)*nz + k -1];
+        if (i == nx) u1[((nx+1) * (ny+2) + j)*(nz+2) + k] =  d_bx1[(j-1)*nz + k -1];
+        if (j == 1) u1[(i * (ny+2) + 0)*(nz+2) + k] =  d_by0[(i-1)*nz + k -1];
+        if (j == ny) u1[(i * (ny+2) + ny+1)*(nz+2) + k] =  d_by1[(i-1)*nz + k -1];
+        if (k == 1) u1[(i * (ny+2) + j)*(nz+2) + 0] =  d_bz0[(i-1)*ny + j -1];
+        if (k == nz) u1[(i * (ny+2) + 0)*(nz+2) + nz+1] =  d_bz1[(i-1)*ny + j -1];
+    }
     int gi = sx + (i-1);
     int gj = sy + (j-1);
     int gk = sz + (k-1);
@@ -136,13 +139,14 @@ if (k == nz) u1[(i * (ny+2) + 0)*(nz+2) + nz+1] =  d_bz1[(i-1)*ny + j -1];
 
     double val = 2*u1[id] - u0[id] + a*tau*tau*lap;
     u2[id] = val;
-if (i == 1) d_bx0[(j-1)*nz + k-1] = val;
-    if (i == nx) d_bx1[(j-1)*nz + k-1] = val;
-if (j == 1) d_by0[(i-1)*nz + k-1] = val;
-if (j == ny) d_by1[(i-1)*nz + k-1] = val;
-if (k == 1) d_bz0[(i-1)*ny + j-1] = val;
-if (k == nz) d_bz1[(i-1)*ny + j-1] = val;
-
+    if (write_bounds){
+        if (i == 1) d_bx0[(j-1)*nz + k-1] = val;
+        if (i == nx) d_bx1[(j-1)*nz + k-1] = val;
+        if (j == 1) d_by0[(i-1)*nz + k-1] = val;
+        if (j == ny) d_by1[(i-1)*nz + k-1] = val;
+        if (k == 1) d_bz0[(i-1)*ny + j-1] = val;
+        if (k == nz) d_bz1[(i-1)*ny + j-1] = val;
+    }
     double x = gi * dx;
     double y = gj * dy;
     double z = gk * dz;
@@ -181,7 +185,7 @@ void it1_kernel_launcher(
     int sx, int sy, int sz,
     double dx, double dy, double dz,
     double a, double tau,
-    double &err
+    double &err, bool write_bounds
 )
 {
     dim3 block(8, 8, 8);
@@ -193,7 +197,7 @@ void it1_kernel_launcher(
         u0, u1, d_bx0, d_bx1, d_by0, d_by1, d_bz0, d_bz1, nx, ny, nz,
         sx, sy, sz,
         dx, dy, dz, a, tau,
-        thrust::raw_pointer_cast(err1.data())
+        thrust::raw_pointer_cast(err1.data()), write_bounds
     );
 
     cudaDeviceSynchronize();
@@ -212,7 +216,7 @@ void main_kernel_launcher(
     int sx, int sy, int sz,
     double dx, double dy, double dz,
     double a, double tau, double t, 
-    double &err
+    double &err, bool write_bounds
 )
 {
     dim3 block(8, 8, 8);
@@ -230,7 +234,7 @@ void main_kernel_launcher(
         sx, sy, sz,
         dx, dy, dz,
         a, tau, t,
-        thrust::raw_pointer_cast(err_main.data())
+        thrust::raw_pointer_cast(err_main.data()), write_bounds
     );
 
     cudaDeviceSynchronize();
